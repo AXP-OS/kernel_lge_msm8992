@@ -516,6 +516,8 @@ mark_source_chains(const struct xt_table_info *newinfo,
 				size = e->next_offset;
 				e = (struct ipt_entry *)
 					(entry0 + pos + size);
+				if (pos + size >= newinfo->size)
+					return 0;
 				e->counters.pcnt = pos;
 				pos += size;
 			} else {
@@ -534,9 +536,13 @@ mark_source_chains(const struct xt_table_info *newinfo,
 					/* This a jump; chase it. */
 					duprintf("Jump rule %u -> %u\n",
 						 pos, newpos);
+					e = (struct ipt_entry *)
+						(entry0 + newpos);
 				} else {
 					/* ... this is a fallthru */
 					newpos = pos + e->next_offset;
+					if (newpos >= newinfo->size)
+						return 0;
 				}
 				e = (struct ipt_entry *)
 					(entry0 + newpos);
@@ -566,20 +572,10 @@ static void cleanup_match(struct xt_entry_match *m, struct net *net)
 static int
 check_entry(const struct ipt_entry *e)
 {
-	const struct xt_entry_target *t;
-
 	if (!ip_checkentry(&e->ip))
 		return -EINVAL;
 
-	if (e->target_offset + sizeof(struct xt_entry_target) >
-	    e->next_offset)
-		return -EINVAL;
-
-	t = ipt_get_target_c(e);
-	if (e->target_offset + t->u.target_size > e->next_offset)
-		return -EINVAL;
-
-	return 0;
+	return xt_check_entry_offsets(e, e->target_offset, e->next_offset);
 }
 
 static int
